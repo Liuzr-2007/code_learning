@@ -80,6 +80,14 @@ def collect_folder_info(folder_path):
     if not target.is_dir():
         print("Error: NOT EFFECTIVE FOLDER_PATH!")
         return
+
+    # 新增：询问是否查询隐藏文件
+    while True:
+        choose_hidden = input("是否一并查询隐藏/系统文件？输入 y 包含，n 过滤：").strip().lower()
+        if choose_hidden in ['y', 'n']:
+            break
+        print("无效输入，请输入 y 或 n")
+
     #提示进度
     print(f"==========正在收集信息:{target}==========")
     all_files = []
@@ -89,13 +97,15 @@ def collect_folder_info(folder_path):
     #递归遍历 target 目录每一层，
     #root 当前目录路径，files 当前目录下所有文件名列表。
     for root, dirs, files in os.walk(target):
-        dirs[:] = [d for d in dirs if not skip_hidden_system(Path(root)/d)]
+        if choose_hidden == 'n':
+            dirs[:] = [d for d in dirs if not skip_hidden_system(Path(root)/d)]
 
         #循环当前层每一个文件名称。
         for filename in files:
             #用 pathlib 拼接得到文件完整路径对象
             file_full = Path(root)/filename
-            if skip_hidden_system(file_full):
+
+            if choose_hidden == 'n' and skip_hidden_system(file_full):
                 continue
 
             # 仅调用一次stat，统一获取大小、时间，避免重复IO
@@ -133,7 +143,10 @@ def collect_folder_info(folder_path):
             print("-" * 48)
 
     with open("文件夹信息汇总.txt", "w", encoding="utf-8") as f:
-        f.write("===== 文件夹扫描汇总报告（已过滤隐藏/系统文件）=====\n")
+        if choose_hidden == 'y':
+            f.write("===== 文件夹扫描汇总报告（包含隐藏/系统文件）=====\n")
+        else:
+            f.write("===== 文件夹扫描汇总报告（已过滤隐藏/系统文件）=====\n")
         f.write(f"扫描目录：{target}\n")
         f.write(f"有效文件总数：{len(all_files)} 个\n")
         if isinstance(total_byte, int):
@@ -153,22 +166,40 @@ def collect_folder_info(folder_path):
             f.write(f"文件大小：{info['size_byte']} 字节\n")
             f.write(f"创建时间：{info['create_time']}\n")
             f.write(f"修改时间：{info['modify_time']}\n")
-    print(f"\n收集完成，共扫描{len(all_files)}个有效文件")
+    print(f"\n收集完成，共扫描{len(all_files)}个有效文件\n")
     if isinstance(total_byte, int):
         print(f"文件夹总容量：{total_byte / 1024 / 1024:.2f} MB")
     print("完整报告已保存至：文件夹信息汇总.txt")
 
-#help(collect_folder_info)
+#help(collect_folder_info)查看函数功能
 
 if __name__ == "__main__":
-    # 调试专用：写死目标文件夹路径
-    folder_input = r"D:\c++\work\Document Summarizer\test"
-    collect_folder_info(folder_input)
-    if len(sys.argv) < 2:
-        print("使用方法：将文件夹拖拽到本程序/终端窗口内运行")
-        input("按回车退出...")
-    else:
-        # 第一个参数是程序本身，后面是拖拽进来的路径
-        folder_input = sys.argv[1]
-        collect_folder_info(folder_input)
-        input("\n扫描完毕，按回车关闭窗口")
+    
+
+    print("\n==================== 功能选择菜单 ====================")
+    print("输入 CFI ：执行文件夹扫描统计（原程序功能）")
+    print("输入其他任意字符：执行功能2")
+    print("输入 q ：退出程序")
+    while True:
+        choice = input("请输入你的选择：").strip()
+
+
+        if choice.lower() == "q":
+            print("程序已退出。")
+            sys.exit(0)
+        elif choice.upper() == "CFI":
+            # 调试专用：写死目标文件夹路径
+            # folder_input = r"D:\c++\work\Document Summarizer\test"
+            if len(sys.argv) < 2:
+                print("使用方法：将文件夹拖拽到本程序/终端窗口内运行")
+                folder_input = input("目标文件夹路径：").strip(' "')
+            else:
+                # 第一个参数是程序本身，后面是拖拽进来的路径
+                folder_input = sys.argv[1]
+            collect_folder_info(folder_input)
+            input("\n扫描完成，按回车键返回功能菜单...")
+        else:
+            # 预留功能2
+            print("功能2待开发")
+            input("按回车返回菜单")
+                
