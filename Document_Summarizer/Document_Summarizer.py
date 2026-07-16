@@ -6,32 +6,27 @@ import datetime
 from pathlib import Path
 from collections import defaultdict
 
-
 # Windows 文件属性标志常量
-FILE_ATTRIBUTE_READONLY   = 0x0001  # 1  只读文件
-FILE_ATTRIBUTE_HIDDEN     = 0x0002  # 2  隐藏文件
-FILE_ATTRIBUTE_SYSTEM     = 0x0004  # 4  系统文件
-FILE_ATTRIBUTE_DIRECTORY  = 0x0010  # 16 目录/文件夹
-FILE_ATTRIBUTE_ARCHIVE    = 0x0020  # 32 存档文件
+FILE_ATTRIBUTE_READONLY   = 0x0001  # 只读文件
+FILE_ATTRIBUTE_HIDDEN     = 0x0002  # 隐藏文件
+FILE_ATTRIBUTE_SYSTEM     = 0x0004  # 系统文件
+FILE_ATTRIBUTE_DIRECTORY  = 0x0010  # 目录/文件夹
+FILE_ATTRIBUTE_ARCHIVE    = 0x0020  # 存档文件
 
-# 绑定 kernel32 API，指定参数、返回值类型，规避类型错误
+# 绑定 kernel32 API，严格指定参数、返回值类型，规避类型转换报错
 kernel32 = ctypes.windll.kernel32
 kernel32.GetFileAttributesW.argtypes = [ctypes.c_wchar_p]
 kernel32.GetFileAttributesW.restype = ctypes.c_uint32
 
-def get_file_attributes(file_path:Path)->int:
-    """获取文件属性标志"""
+def get_file_attributes(file_path: Path) -> int:
+    """获取Windows文件属性标志，失败返回-1"""
     try:
         return kernel32.GetFileAttributesW(str(file_path))
     except Exception:
         return -1
 
-def is_hidden_file(file_path:Path)->bool:
-        
-    """判断文件/文件夹是否拥有隐藏属性
-    :param file_path: 文件/目录路径 Path 对象
-    :return: 存在且隐藏返回 True，不存在/无隐藏属性返回 False
-    """
+def is_hidden_file(file_path: Path) -> bool:
+    """判断是否拥有隐藏属性：存在且隐藏返回True"""
     attrs = get_file_attributes(file_path)
     if attrs == -1:
         return False
@@ -44,85 +39,105 @@ def is_system_file(file_path: Path) -> bool:
         return False
     return bool(attrs & FILE_ATTRIBUTE_SYSTEM)
 
-def skip_hidden_system(path:Path)->bool:
-    """综合过滤：隐藏文件/系统文件/.开头文件 返回True=跳过不扫描"""
-    if is_hidden_file(path) or is_system_file(path):
-        return True
-    if path.name.startswith("."):
-        return True
-    return False
+def skip_hidden_system(path: Path) -> bool:
+    """综合过滤规则：隐藏/系统文件/点开头文件 返回True=跳过扫描"""
+    return is_hidden_file(path) or is_system_file(path) or path.name.startswith(".")
 
-def get_file_create_time(file_path:Path):
-    """获取文件创建时间"""
-    try:
-        timestamp = file_path.stat().st_ctime
-        create_time = datetime.datetime.fromtimestamp(timestamp)
-        return create_time.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception as e:
-        return f"Error: {e}"
+def format_size(byte_num: int) -> str:
+    """字节自动格式化 GB/MB/KB/B，提升报告可读性"""
+    if byte_num >= 1024 ** 3:
+        return f"{byte_num / (1024 ** 3):.2f} GB"
+    elif byte_num >= 1024 ** 2:
+        return f"{byte_num / (1024 ** 2):.2f} MB"
+    elif byte_num >= 1024:
+        return f"{byte_num / 1024:.2f} KB"
+    else:
+        return f"{byte_num} B"
 
-def get_file_mod_time(file_path:Path):
-    """获取文件修改时间"""
-    try:
-        timestamp = file_path.stat().st_mtime
-        mod_time = datetime.datetime.fromtimestamp(timestamp)
-        return mod_time.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception as e:
-        return f"Error: {e}"
-
-def collect_folder_info(folder_path):
+# 修复：补充函数末尾缺失冒号
+def get_file_time_str(stat_info, time_type: str = "create") -> str:
     """
-    遍历目标文件夹，统计文件数量、总大小、子文件夹数、
-    各类型文件分布、目录树摘要，返回结构化字典信息
-    :param folder_path: 目标文件夹路径
+    统一提取文件时间，仅调用一次stat后复用
+    :param stat_info: Path.stat() 对象
+    :param time_type: create=创建时间(Windows专用) modify=修改时间
     """
-    target = Path(folder_path)
+    try:
+        if time_type == "create":
+            # Windows下 st_ctime = 文件创建时间；Linux下为inode变更时间，无真实创建时间
+            ts = stat_info.st_ctime
+        else:
+            ts = stat_info.st_mtime
+        dt = datetime.datetime.fromtimestamp(ts)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception as e:
+        return f"读取失败: {str(e)}"
+
+def collect_folder_info(folder_input: str):
+    """
+    遍历目标文件夹，统计文件数量、总大小、子文件夹数、后缀分布，输出明细+汇总文本报告
+    :param folder_input: 原始输入路径（拖拽/手动输入）
+    """
+    # 修复：消除转义警告，分开剥离引号
+    clean_path = folder_input.strip().strip('"').strip("'")
+    target = Path(clean_path)
 
     if not target.is_dir():
-        print("Error: NOT EFFECTIVE FOLDER_PATH!")
+        print(f"错误：路径「{target}」不是有效文件夹！")
         return
 
-    # 新增：询问是否查询隐藏文件
+    # 选择是否扫描隐藏/系统文件
     while True:
         choose_hidden = input("是否一并查询隐藏/系统文件？输入 y 包含，n 过滤：").strip().lower()
-        if choose_hidden in ['y', 'n']:
+        if choose_hidden in ("y", "n"):
             break
         print("无效输入，请输入 y 或 n")
 
-    #提示进度
-    print(f"==========正在收集信息:{target}==========")
+    print(f"\n==========开始扫描目录: {target} ==========")
     all_files = []
-    suffix_counter = defaultdict(int)  # 用于统计各类型文件数量
+    suffix_counter = defaultdict(int)
     total_byte = 0
+    dir_count = 0  # 新增：统计子文件夹总数
+    read_fail_count = 0  # 读取失败文件计数
 
-    #递归遍历 target 目录每一层，
-    #root 当前目录路径，files 当前目录下所有文件名列表。
+    # os.walk 自上而下遍历目录树
     for root, dirs, files in os.walk(target):
-        if choose_hidden == 'n':
-            dirs[:] = [d for d in dirs if not skip_hidden_system(Path(root)/d)]
+        current_root = Path(root)
+        print(f"正在扫描目录: {current_root}")
 
-        #循环当前层每一个文件名称。
+        # 过滤不需要遍历的子目录（原地修改dirs，os.walk不再递归进入）
+        if choose_hidden == "n":
+            dirs[:] = [d for d in dirs if not skip_hidden_system(current_root / d)]
+        dir_count += len(dirs)
+
+        # 遍历当前目录所有文件
         for filename in files:
-            #用 pathlib 拼接得到文件完整路径对象
-            file_full = Path(root)/filename
-
-            if choose_hidden == 'n' and skip_hidden_system(file_full):
+            file_full = current_root / filename
+            # 过滤隐藏/系统/点文件
+            if choose_hidden == "n" and skip_hidden_system(file_full):
                 continue
 
-            # 仅调用一次stat，统一获取大小、时间，避免重复IO
+            # 仅单次stat获取全部元数据，减少磁盘IO
             try:
                 stat_info = file_full.stat()
                 file_size = stat_info.st_size
                 total_byte += file_size
+                err_msg = None
             except PermissionError:
-                file_size = "无访问权限"
-            except FileExistsError:
-                file_size = "文件不存在"
-            except Exception as e:
-                file_size = f"其他错误: {e}"
+                file_size = 0
+                err_msg = "权限不足，无法读取大小"
+                read_fail_count += 1
+            except FileNotFoundError:
+                file_size = 0
+                err_msg = "文件已被删除"
+                read_fail_count += 1
+            except OSError as e:
+                file_size = 0
+                err_msg = f"IO异常: {str(e)}"
+                read_fail_count += 1
 
-            create_t = get_file_create_time(file_full)
-            mod_t = get_file_mod_time(file_full)
+            # 获取格式化时间
+            create_t = get_file_time_str(stat_info, "create") if err_msg is None else err_msg
+            mod_t = get_file_time_str(stat_info, "modify") if err_msg is None else err_msg
             suffix = file_full.suffix if file_full.suffix else "无后缀"
             suffix_counter[suffix] += 1
 
@@ -130,77 +145,79 @@ def collect_folder_info(folder_path):
                 "name": filename,
                 "path": str(file_full),
                 "size_byte": file_size,
+                "size_str": format_size(file_size) if err_msg is None else err_msg,
                 "create_time": create_t,
                 "modify_time": mod_t
             }
-            #file_info 字典存储单文件信息，
-            #追加到 all_files 列表统一收集
             all_files.append(file_info)
-            print(f"文件名: {file_info['name']}")
-            print(f"路径: {file_info['path']}")
-            print(f"大小: {file_info['size_byte']} bytes")
-            print(f"创建时间: {file_info['create_time']}")
-            print(f"修改时间: {file_info['modify_time']}")
-            print("-" * 48)
 
-    with open("文件夹信息汇总.txt", "w", encoding="utf-8") as f:
-        if choose_hidden == 'y':
-            f.write("===== 文件夹扫描汇总报告（包含隐藏/系统文件）=====\n")
-        else:
-            f.write("===== 文件夹扫描汇总报告（已过滤隐藏/系统文件）=====\n")
-        f.write(f"扫描目录：{target}\n")
+            # 控制台实时打印单文件信息
+            print(f"【文件】{file_info['name']} | {file_info['size_str']}")
+            print(f"完整路径: {file_info['path']}")
+            print(f"创建: {create_t} | 修改: {mod_t}")
+            print("-" * 60)
+
+    # 生成带时间戳的报告文件名，避免覆盖旧报告
+    time_suffix = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_name = f"文件夹扫描报告_{time_suffix}.txt"
+
+    # 写入汇总报告
+    with open(report_name, "w", encoding="utf-8") as f:
+        scan_mode = "（包含隐藏/系统文件）" if choose_hidden == "y" else "（已过滤隐藏/系统文件）"
+        f.write(f"===== 文件夹扫描汇总报告 {scan_mode} =====\n")
+        f.write(f"扫描根目录：{target}\n")
+        f.write(f"扫描时间：{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"子文件夹总数：{dir_count} 个\n")
         f.write(f"有效文件总数：{len(all_files)} 个\n")
-        if isinstance(total_byte, int):
-            f.write(f"总占用空间：{total_byte / 1024 / 1024:.2f} MB\n\n")
-        else:
-            f.write("总占用空间：存在读取失败文件，无法完整统计\n\n")
+        f.write(f"读取失败文件：{read_fail_count} 个\n")
+        f.write(f"总占用空间：{format_size(total_byte)}\n\n")
 
         f.write("===== 文件后缀分类统计 =====\n")
-        for ext, count in suffix_counter.items():
-            f.write(f"{ext}：{count} 个\n")
-        
+        # 按文件数量倒序输出后缀
+        sorted_suffix = sorted(suffix_counter.items(), key=lambda x: x[1], reverse=True)
+        for ext, count in sorted_suffix:
+            f.write(f"{ext:10s}：{count:4d} 个\n")
+
         f.write("\n===== 全部文件明细列表 =====\n")
         for info in all_files:
-            f.write("----------------------------------------\n")
+            f.write("-" * 60 + "\n")
             f.write(f"文件名：{info['name']}\n")
             f.write(f"完整路径：{info['path']}\n")
-            f.write(f"文件大小：{info['size_byte']} 字节\n")
+            f.write(f"文件大小：{info['size_str']}\n")
             f.write(f"创建时间：{info['create_time']}\n")
             f.write(f"修改时间：{info['modify_time']}\n")
-    print(f"\n收集完成，共扫描{len(all_files)}个有效文件\n")
-    if isinstance(total_byte, int):
-        print(f"文件夹总容量：{total_byte / 1024 / 1024:.2f} MB")
-    print("完整报告已保存至：文件夹信息汇总.txt")
 
-#help(collect_folder_info)查看函数功能
+    # 扫描完成控制台汇总输出
+    print(f"\n==================== 扫描完成 ====================")
+    print(f"根目录子文件夹：{dir_count} 个")
+    print(f"扫描到文件总数：{len(all_files)} 个")
+    print(f"读取失败文件：{read_fail_count} 个")
+    print(f"目录总占用空间：{format_size(total_byte)}")
+    print(f"完整报告已保存至：{os.path.abspath(report_name)}")
 
 if __name__ == "__main__":
-    
+    print("\n==================== 文件扫描工具主菜单 ====================")
+    print("[CFI] 执行文件夹深度扫描统计（当前功能）")
+    print("[q]   退出程序")
+    print("其他输入：预留扩展功能2")
+    print("===========================================================\n")
 
-    print("\n==================== 功能选择菜单 ====================")
-    print("输入 CFI ：执行文件夹扫描统计（原程序功能）")
-    print("输入其他任意字符：执行功能2")
-    print("输入 q ：退出程序")
+    # 严格统一4空格缩进，解决IndentationError
     while True:
-        choice = input("请输入你的选择：").strip()
-
+        choice = input("请输入功能指令：").strip()
 
         if choice.lower() == "q":
-            print("程序已退出。")
+            print("程序正常退出")
             sys.exit(0)
         elif choice.upper() == "CFI":
-            # 调试专用：写死目标文件夹路径
-            # folder_input = r"D:\c++\work\Document Summarizer\test"
-            if len(sys.argv) < 2:
-                print("使用方法：将文件夹拖拽到本程序/终端窗口内运行")
-                folder_input = input("目标文件夹路径：").strip(' "')
-            else:
-                # 第一个参数是程序本身，后面是拖拽进来的路径
+            # 处理拖拽启动参数
+            if len(sys.argv) >= 2:
                 folder_input = sys.argv[1]
+                print(f"检测到拖拽路径：{folder_input}")
+            else:
+                folder_input = input("请输入目标文件夹路径（可直接拖拽文件夹到窗口）：")
             collect_folder_info(folder_input)
-            input("\n扫描完成，按回车键返回功能菜单...")
+            input("\n按回车键返回功能菜单...")
         else:
-            # 预留功能2
-            print("功能2待开发")
-            input("按回车返回菜单")
-                
+            print("功能2待开发，仅占位预留")
+            input("按回车键返回菜单")
