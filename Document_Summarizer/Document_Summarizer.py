@@ -1,10 +1,14 @@
 # -*- coding: utf-8 -*-
 import os
+from re import X
 import sys
 import ctypes
 import datetime
 from pathlib import Path
 from collections import defaultdict
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from PIL import Image
 
 # Windows 文件属性标志常量
 FILE_ATTRIBUTE_READONLY   = 0x0001  # 只读文件
@@ -195,9 +199,58 @@ def collect_folder_info(folder_input: str):
     print(f"目录总占用空间：{format_size(total_byte)}")
     print(f"完整报告已保存至：{os.path.abspath(report_name)}")
 
+def folder_images_to_pdf(folder_path):
+    """
+    读取指定文件夹内所有图片，合并生成单PDF，一张照片一页，A4居中自适应
+    :param folder_path: 存放照片的文件夹路径，如 r"D:\照片合集"
+    """
+    clean_path = folder_path.strip().strip('"').strip("'")
+    target = Path(clean_path)
+    output_pdf = str(target / "批量照片汇总.pdf")
+    img_suffix = (".jpg", ".jpeg", ".png")
+    img_path_list = []
+
+    for filename in os.listdir(target):
+        # 拼接完整文件路径
+        full_file_path = os.path.join(target,filename)
+        # 判断是否为图片
+        if filename.lower().endswith(img_suffix):
+            img_path_list.append(full_file_path)
+
+    # 无图片直接退出
+    if len(img_path_list)==0:
+        print("未检测到任何图片文件，PDF生成失败")
+        return
+
+    # 创建PDF画布
+    pdf = canvas.Canvas(output_pdf, pagesize=A4)
+    page_width, page_height =A4
+
+    # 循环绘制每张照片
+    for img_path in img_path_list:
+        try:
+            img = Image.open(img_path)
+            img_width, img_height = img.size
+            # 计算缩放比例，保持纵横比
+            scale_rate = min(page_height / img_height, page_width / img_width)
+            draw_w = img_width * scale_rate
+            draw_h = img_height * scale_rate
+            # 计算居中位置
+            X = (page_width - draw_w) / 2
+            Y = (page_height - draw_h) / 2
+            # 绘制图片到PDF
+            pdf.drawImage(img_path, X, Y, width=draw_w, height=draw_h)
+            pdf.showPage()  # 新增一页
+        except Exception as e:
+            print(f"图片 {img_path} 处理失败: {str(e)}")
+    pdf.save()
+    print(f"PDF生成成功")
+
+
 if __name__ == "__main__":
     print("\n==================== 文件扫描工具主菜单 ====================")
-    print("[CFI] 执行文件夹深度扫描统计（当前功能）")
+    print("[CFI] 执行文件夹深度扫描统计")
+    print("[PDF] 执行文件夹图片合并生成PDF")
     print("[q]   退出程序")
     print("其他输入：预留扩展功能2")
     print("===========================================================\n")
@@ -218,6 +271,14 @@ if __name__ == "__main__":
                 folder_input = input("请输入目标文件夹路径（可直接拖拽文件夹到窗口）：")
             collect_folder_info(folder_input)
             input("\n按回车键返回功能菜单...")
+        elif choice.upper() == "PDF":
+            if len(sys.argv) >= 2:
+                folder_input = sys.argv[1]
+                print(f"检测到拖拽路径：{folder_input}")
+            else:
+                folder_input = input("请输入目标文件夹路径（可直接拖拽文件夹到窗口）：")
+            folder_images_to_pdf(folder_input)
+            input("\n按回车键返回功能菜单...")
         else:
-            print("功能2待开发，仅占位预留")
+            print("功能3待开发，仅占位预留")
             input("按回车键返回菜单")
