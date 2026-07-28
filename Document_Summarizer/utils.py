@@ -8,19 +8,29 @@ import datetime
 from pathlib import Path
 
 # 日志配置
+# 全局日志基础配置
 logging.basicConfig(
+    #日志等级 INFO：普通正常运行信息，无报错、无警告，记录程序常规操作
+    #日志级别：只输出 INFO 及以上（INFO/WARNING/ERROR/CRITICAL）
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[logging.StreamHandler()]
+    #StreamHandler = 控制台输出；
 )
+
+#作用：获取 / 创建命名日志器（单例模式：同一个 name 
+#只会生成一个 logger 对象，重复调用不会新建）。
 logger = logging.getLogger(__name__)
 
-# Windows 文件属性标志常量
+# Windows 文件属性标志常量，十六进制
 FILE_ATTRIBUTE_READONLY = 0x0001  # 只读文件
 FILE_ATTRIBUTE_HIDDEN = 0x0002    # 隐藏文件
 FILE_ATTRIBUTE_SYSTEM = 0x0004    # 系统文件
 FILE_ATTRIBUTE_DIRECTORY = 0x0010 # 目录/文件夹
 FILE_ATTRIBUTE_ARCHIVE = 0x0020   # 存档文件
+#结果≠0：对应属性开启
+#结果 = 0：对应属性关闭
+
 
 # 绑定 kernel32 API
 kernel32 = ctypes.windll.kernel32
@@ -30,13 +40,23 @@ kernel32.GetFileAttributesW.restype = ctypes.c_uint32
 
 def clean_path_input(raw: str) -> Path:
     """统一清理用户输入路径：去引号、去空格、展开环境变量"""
+    # 1. 首尾空格清理，再去除首尾单/双引号（用户复制粘贴常带引号）
     cleaned = raw.strip().strip('"').strip("'")
+    # 2. 解析系统环境变量，例如 %USERPROFILE%、$HOME
     expanded = os.path.expandvars(cleaned)
+    # 3. 转为跨平台 Path 对象（Windows / Linux / Mac 自动适配）
+    #$HOME 是一个环境变量，它的值是当前用户的完整家目录路径，不只是用户名。
+    #举例子：
+    #用户名：xxx
+    #$HOME 的值：/home/xxx
     return Path(expanded)
 
 
 def display_width(text: str) -> int:
     """计算字符串显示宽度，中文字符算2，英文算1"""
+    #ord(单个字符)
+    #作用：返回这个字符对应的 Unicode 编码数字。
+    #配套反向函数：chr(数字)，根据编码数字转回字符。
     return sum(2 if ord(c) > 127 else 1 for c in text)
 
 
@@ -53,6 +73,7 @@ def is_hidden_file(file_path: Path) -> bool:
     attrs = get_file_attributes(file_path)
     if attrs == -1:
         return False
+    #返回attrs与文件掩码
     return bool(attrs & FILE_ATTRIBUTE_HIDDEN)
 
 
@@ -61,6 +82,7 @@ def is_system_file(file_path: Path) -> bool:
     attrs = get_file_attributes(file_path)
     if attrs == -1:
         return False
+    #返回attrs与文件掩码
     return bool(attrs & FILE_ATTRIBUTE_SYSTEM)
 
 

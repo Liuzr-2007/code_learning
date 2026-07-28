@@ -51,8 +51,11 @@ def folder_images_to_pdf(folder_path: str) -> None:
 
                 # 修复：RGBA PNG 转 RGB 兼容 reportlab
                 if img.mode == "RGBA":
+                    #Image.convert(mode)：转换图片的色彩模式
                     rgb_img = img.convert("RGB")
+                    #安全创建一个唯一、空、可读写的临时文件，返回 文件描述符 fd + 文件完整路径。
                     temp_fd, temp_file = tempfile.mkstemp(suffix=".jpg")
+                    #向操作系统发起调用，释放这个文件描述符资源，断开程序和临时文件的底层绑定。
                     os.close(temp_fd)
                     rgb_img.save(temp_file, "JPEG")
                     draw_img_path = temp_file
