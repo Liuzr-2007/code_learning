@@ -13,6 +13,29 @@ from PyQt5.QtCore import Qt
 from app import __version__
 from app.main_window import MainWindow
 
+# 高德地图HTML，内嵌JS地图API
+MAP_HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>高德地图</title>
+<style>html,body,#container{width:100%;height:100%;margin:0;padding:0;}</style>
+<script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=78825e4e5219b80a9fe44df433e35771"></script>
+</head>
+<body>
+<div id="container"></div>
+<script>
+var map = new AMap.Map("container", {
+    zoom:12,
+    center:[112.9388,28.2282]  //长沙经纬度
+});
+// 添加标记点
+new AMap.Marker({position:[112.9388,28.2282]}).setMap(map);
+</script>
+</body>
+</html>
+'''
 
 def main() -> int:
     # 高分屏自适应
