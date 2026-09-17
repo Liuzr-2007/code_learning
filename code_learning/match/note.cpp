@@ -96,3 +96,33 @@ while ((n - i) + ((int)b.size() - j) > 1) {  // 剩下的堆数 > 1 就继续
 	ans += s;                  // 本次合并的代价
 	b.push_back(s);            // 新堆放进 b 队尾（它 ≥ 上一个新堆，b 保持有序）
 }
+
+/*
+键盘输入一个高精度的正整数 n（不超过 250 位）
+去掉其中任意 k 个数字后剩下的数字按原左右次序将
+组成一个新的非负整数。编程对给定的 n 和 k，寻找
+一种方案使得剩下的数字组成的新数最小。
+*/
+#include<iostream>
+#include<string>
+using namespace std;
+int n, k, a[257], rest, t = 1, minp, cnt = 0;
+bool flag = 0;
+string num;
+int main() {
+	cin >> num >> k;//input
+	n = num.length();//length
+	for (int i = 1; i <= n; ++i)a[i] = num[i - 1] - '0';//a->int
+	rest = n - k;//rest length
+	while (cnt < rest) {
+		minp = t;
+		for (int i = t; i <= k + t; ++i)if (a[minp] > a[i])minp = i;//find lest
+		if (a[minp])flag = 1;//check if there is a non-zero digit
+		if (flag)cout << a[minp];
+		k -= minp - t;
+		t = minp + 1;
+		cnt++;
+	}
+	if (!flag)cout << 0;
+	return 0;
+}
