@@ -4,6 +4,8 @@ from multiprocessing import parent_process
 import numpy as np
 import random
 
+from numpy._core.multiarray import dragon4_scientific
+
 class Node:#先设置节点到时候再更改
     def __init__(self,state,parent=None):
         self.state = state
@@ -16,8 +18,16 @@ class Node:#先设置节点到时候再更改
         if self.visit == 0:return float('inf')
         return self.win/self.visit + c * math.sqrt(math.log(self.parent.visit)/self.visit)
 
-def is_valid(state,r,c,me=1):
-    """这一步棋是否合法"""
+def is_valid(state,r,c,me):
+    """假设我下我方颜色 me，对手颜色op = -me
+
+1. 从落子点(r,c)往某个方向走一步，得到nr, nc
+2. 如果nr,nc越界 → 这个方向无效，换下一个方向
+3. 如果board[nr][nc] != op → 这个方向没有对手棋子，无效
+4. 如果是对手棋子：继续沿着同方向一直往前走
+   - 碰到我方棋子：这个方向可以翻转，该位置(r,c)是合法点
+   - 碰到空位 / 出界：这个方向无效
+    只要**任意一个方向满足**，这个位置就是合法落子点。"""
     if board[r][c] != 0:
         return False
     op = -me
@@ -25,11 +35,11 @@ def is_valid(state,r,c,me=1):
     dirs = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
     #是否存在可以翻转的棋子
     has_flip = False
-    for dr ,dc,in dirs:
+    for dr,dc,in dirs:
         nr = r+dr
         nc = c+dc
         found_opp =False
-        while 0<=nr <8 and 0<=nc<8:
+        while 0<=nr<8 and 0<=nc<8:
             if board[nr][nc] ==op:
                 found_opp = True
                 nr+=dr
@@ -52,25 +62,42 @@ def get_all_valid_step(board):
                 moves.append((r,c))
     return moves
 
-def get_empty(state):#作用：遍历序列，同时拿到下标和对应的值
-    return [i for i,v in enumerate(state) if v == 0]
+def place_and_flip(board,r,c,me):
+    op = -me
+    dirs = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]
+    new_board = [row.copy() for row in board]
+    new_board[r][c] = me
+    for dr,dc in dirs:
+        nr = r+dr
+        nc = c+dc
+        flip_list = []
+        while 0 <= nr <8 and 0 <= nc <8:
+            if new_board[nr][nc] == op:
+                flip_list.append((nr,nc))
+                nr += dr
+                nc += dc
+            elif new_board[nr][nc]==me:
+                for fr,fc in flip_list:
+                    new_board[fr][fc] = me
+                break
+            else:
+                break
+    return new_board
 
-def is_end(state):#这是简化的版本，等理解了原理再改
-    win = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
-    for a,b,c in win:
-        if state[a]==state[b]==state[c] and state[a]!=0:#保证abc都是玩家的棋子
-            return state[a]
-    return 0 if 0 in state else 2 #2是平局，这里的判断真是漂亮
+def is_game_over(board):
+    black_has_move = len(get_all_valid_step(board, 1)) > 0
+    white_has_move = len(get_all_valid_step(board, -1)) > 0
+    return not black_has_move and not white_has_move
 
 def rollout(state):
-    """模拟棋盘，目前采用的是随机下棋误差很大"""
+    """模拟棋盘1(目前采用的是随机下棋误差很大"""
     s = state.copy()          # 复制棋盘，不要污染原局面
     turn = 1                  # 当前轮到谁下棋：1玩家，-1AI
-    while is_end(s)==0:       # 只要游戏还没结束，就循环
-        pos = random.choice(get_empty(s)) # 随机选一个空位
+    while is_game_over(s)==0:       # 只要游戏还没结束，就循环
+        pos = random.choice(get_all_valid_step(s,turn)) # 随机选一个空位
         s[pos] = turn         # 在这个位置落子
         turn *= -1            # 切换玩家（1变-1，-1变1）
-    res = is_end(s)           # 得到最终对局结果
+    res = is_game_over(s)           # 得到最终对局结果
     return 1 if res==-1 else 0# 如果AI赢返回1，否则返回0
 
 # 模拟的特点
@@ -82,11 +109,11 @@ def rollout(state):
 def mcts(root,times=500):#限制循环轮数，防止时间过长
     for _ in range(times):
         n = root
-        while n.children and get_empty(n.state):#n.children当前节点有子节点
+        while n.children and get_all_valid_step(n.state):#n.children当前节点有子节点
             n = max(n.children,key = lambda x:x.uct())#对每个子节点`x`，调用`x.uct()`算出 UCT 值
 
-        if get_empty(n.state):
-            pos = random.choice(get_empty(n.state))
+        if get_all_valid_step(n.state):
+            pos = random.choice(get_all_valid_step(n.state))
             ns = n.state.copy()
             ns[pos] = -1
             new_node = Node(ns,n)
@@ -130,7 +157,7 @@ if __name__ == "__main__":
             continue
 
         board[p]=1
-        res = is_end(board)
+        res = is_game_over(board)
         if res != 0:
             if res == 1:
                 print("🎉 你赢了！")
@@ -143,4 +170,4 @@ if __name__ == "__main__":
         board = mcts(Node(board),300)
         print("AI落子后：")
         print_board(board)
-        if is_end(board)!=0:break
+        if is_game_over(board)!=0:break
