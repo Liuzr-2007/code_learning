@@ -1,0 +1,4 @@
+# Local credentials and machine-specific settings
+app/private_config.py
+__pycache__/
+*.py[cod]

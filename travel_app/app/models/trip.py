@@ -47,6 +47,8 @@ class Trip:
     start_date: str
     end_date: str
     status: str = STATUS_PLANNED
+    origin: str = ""
+    transport: str = "car"
     id: str = field(default_factory=lambda: uuid4().hex)
 
     def to_dict(self) -> dict:
@@ -57,6 +59,8 @@ class Trip:
             "start_date": self.start_date,
             "end_date": self.end_date,
             "status": self.status,
+            "origin": self.origin,
+            "transport": self.transport,
         }
 
     @classmethod
@@ -71,4 +75,6 @@ class Trip:
             start_date=str(data.get("start_date", "")),
             end_date=str(data.get("end_date", "")),
             status=status,
+            origin=str(data.get("origin", "")),
+            transport=str(data.get("transport", "car")),
         )

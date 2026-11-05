@@ -23,6 +23,7 @@ from PyQt5.QtWidgets import (
 from app import i18n
 from app.models.trip import Trip
 from app.storage.trip_store import TripStore
+from app.views.map_view import MapViewWindow
 from app.views.trip_form_dialog import TripFormDialog
 
 
@@ -36,6 +37,7 @@ class TripsPage(QWidget):
         super().__init__(parent)
         self._store = store
         self._trips: List[Trip] = []
+        self._map_window = None
         self._build_ui()
         self.retranslate_ui()
 
@@ -75,6 +77,10 @@ class TripsPage(QWidget):
         self.edit_btn = self._make_ghost_btn()
         self.edit_btn.clicked.connect(self._on_edit)
         toolbar.addWidget(self.edit_btn)
+
+        self.map_btn = self._make_ghost_btn()
+        self.map_btn.clicked.connect(self._on_view_map)
+        toolbar.addWidget(self.map_btn)
 
         self.delete_btn = self._make_danger_btn()
         self.delete_btn.clicked.connect(self._on_delete)
@@ -156,9 +162,14 @@ class TripsPage(QWidget):
         date_range = i18n.t("list_date_range").format(
             start=trip.start_date, end=trip.end_date
         )
+        status_label = i18n.t("status_" + trip.status)
+        if trip.origin:
+            route = i18n.t("list_route").format(
+                origin=trip.origin, destination=trip.destination or "—"
+            )
+            return f"{trip.title}  [{status_label}]\n{route}  ·  {date_range}"
         dest_label = i18n.t("list_destination_label")
         dest = trip.destination or "—"
-        status_label = i18n.t("status_" + trip.status)
         return f"{trip.title}  [{status_label}]\n{dest_label}: {dest}  ·  {date_range}"
 
     def _selected_trip(self) -> Optional[Trip]:
@@ -174,6 +185,7 @@ class TripsPage(QWidget):
         self.title_label.setText(i18n.t("page_trips_title"))
         self.new_btn.setText(i18n.t("btn_new_trip"))
         self.edit_btn.setText(i18n.t("btn_edit"))
+        self.map_btn.setText(i18n.t("btn_view_map"))
         self.delete_btn.setText(i18n.t("btn_delete"))
         self.empty_label.setText(i18n.t("empty_trips"))
         # 列表项文案依赖语言（状态/日期格式），需重绘
@@ -202,6 +214,15 @@ class TripsPage(QWidget):
             self._store.update(updated)
             self.refresh()
             self._notify_status(i18n.t("status_trip_updated"))
+
+    def _on_view_map(self) -> None:
+        trip = self._selected_trip()
+        if trip is None:
+            self._notify_status(i18n.t("status_no_trip_selected"))
+            return
+        self._map_window = MapViewWindow(trip.origin, trip.destination, self, trip.transport, trip.start_date, trip.end_date)
+        self._map_window.show()
+        self._notify_status(i18n.t("status_map_loading"))
 
     def _on_delete(self) -> None:
         current = self.list_widget.currentItem()

@@ -20,6 +20,7 @@ from PyQt5.QtWidgets import (
 from app import i18n
 from app.models.trip import Trip
 from app.storage.trip_store import TripStore
+from app.views.map_view import MapViewWindow
 from app.views.trip_form_dialog import TripFormDialog
 
 
@@ -32,6 +33,7 @@ class TripDetailPage(QWidget):
         super().__init__(parent)
         self._store = store
         self._trip: Optional[Trip] = None
+        self._map_window = None
         self._build_ui()
         self.retranslate_ui()
 
@@ -69,14 +71,26 @@ class TripDetailPage(QWidget):
         )
         self.edit_btn.clicked.connect(self._on_edit)
         top.addWidget(self.edit_btn)
+
+        self.map_btn = QPushButton(self)
+        self.map_btn.setCursor(Qt.PointingHandCursor)
+        self.map_btn.setStyleSheet(
+            "QPushButton { background-color: #f3f4f6; color: #374151; padding: 6px 16px;"
+            " border: 1px solid #e5e7eb; border-radius: 6px; font-size: 14px; }"
+            "QPushButton:hover { background-color: #e5e7eb; }"
+        )
+        self.map_btn.clicked.connect(self._on_view_map)
+        top.addWidget(self.map_btn)
         root.addLayout(top)
 
         # 详情卡片
         self.trip_title_value = QLabel(self)
+        self.origin_value = QLabel(self)
         self.destination_value = QLabel(self)
         self.start_value = QLabel(self)
         self.end_value = QLabel(self)
         self.status_value = QLabel(self)
+        self.transport_value = QLabel(self)
         self._field_labels = []  # 由 retranslate 填充左侧标签
 
         self.card = QWidget(self)
@@ -92,10 +106,12 @@ class TripDetailPage(QWidget):
         self.rows = []
         for value_label in (
             self.trip_title_value,
+            self.origin_value,
             self.destination_value,
             self.start_value,
             self.end_value,
             self.status_value,
+            self.transport_value,
         ):
             row = QHBoxLayout()
             key_label = QLabel(self)
@@ -137,28 +153,34 @@ class TripDetailPage(QWidget):
             return
         trip = self._trip
         self.trip_title_value.setText(trip.title)
+        self.origin_value.setText(trip.origin or "—")
         self.destination_value.setText(trip.destination or "—")
         self.start_value.setText(trip.start_date)
         self.end_value.setText(trip.end_date)
         self.status_value.setText(i18n.t("status_" + trip.status))
+        self.transport_value.setText(i18n.t("transport_" + trip.transport))
 
     # ------------------------------------------------------------- 文案刷新
     def retranslate_ui(self) -> None:
         self.back_btn.setText(i18n.t("btn_back"))
         self.title_label.setText(i18n.t("page_detail_title"))
         self.edit_btn.setText(i18n.t("btn_edit"))
+        self.map_btn.setText(i18n.t("btn_view_map"))
         self.not_found_label.setText(i18n.t("detail_not_found"))
         keys = (
             "detail_title",
+            "detail_origin",
             "detail_destination",
             "detail_start",
             "detail_end",
             "detail_status",
+            "detail_transport",
         )
         for (key_label, _), key in zip(self.rows, keys):
             key_label.setText(i18n.t(key))
         if self._trip is not None:
             self.status_value.setText(i18n.t("status_" + self._trip.status))
+            self.transport_value.setText(i18n.t("transport_" + self._trip.transport))
 
     # ------------------------------------------------------------- 交互回调
     def _on_edit(self) -> None:
@@ -171,6 +193,13 @@ class TripDetailPage(QWidget):
             self._trip = updated
             self._refresh_values()
             self._notify_status(i18n.t("status_trip_updated"))
+
+    def _on_view_map(self) -> None:
+        if self._trip is None:
+            return
+        self._map_window = MapViewWindow(self._trip.origin, self._trip.destination, self, self._trip.transport, self._trip.start_date, self._trip.end_date)
+        self._map_window.show()
+        self._notify_status(i18n.t("status_map_loading"))
 
     def _notify_status(self, message: str) -> None:
         window = self.window()

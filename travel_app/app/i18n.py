@@ -66,6 +66,18 @@ _STRINGS: dict[str, dict[str, str]] = {
         LANG_ZH: "删除",
         LANG_EN: "Delete",
     },
+    "btn_view_map": {
+        LANG_ZH: "查看地图",
+        LANG_EN: "View Map",
+    },
+    "map_dialog_title": {
+        LANG_ZH: "地图",
+        LANG_EN: "Map",
+    },
+    "status_map_loading": {
+        LANG_ZH: "正在加载地图…",
+        LANG_EN: "Loading map…",
+    },
     "empty_trips": {
         LANG_ZH: "还没有行程，点击「新建行程」开始记录吧",
         LANG_EN: "No trips yet. Click “New Trip” to start planning.",
@@ -114,6 +126,15 @@ _STRINGS: dict[str, dict[str, str]] = {
     "form_destination": {
         LANG_ZH: "目的地",
         LANG_EN: "Destination",
+    },
+    "form_transport": {LANG_ZH: "出行方式", LANG_EN: "Transport"},
+    "transport_car": {LANG_ZH: "汽车", LANG_EN: "Car"},
+    "transport_plane": {LANG_ZH: "飞机", LANG_EN: "Plane"},
+    "transport_high_speed_rail": {LANG_ZH: "高铁", LANG_EN: "High-speed rail"},
+    "transport_rail": {LANG_ZH: "铁路（高铁/火车）", LANG_EN: "Rail (high-speed/train)"},
+    "form_origin": {
+        LANG_ZH: "出发地",
+        LANG_EN: "Origin",
     },
     "form_destination_placeholder": {
         LANG_ZH: "输入城市名自动匹配，如“长沙”",
@@ -185,6 +206,22 @@ _STRINGS: dict[str, dict[str, str]] = {
         LANG_ZH: "目的地",
         LANG_EN: "Destination",
     },
+    "detail_origin": {
+        LANG_ZH: "出发地",
+        LANG_EN: "Origin",
+    },
+    "list_route": {
+        LANG_ZH: "{origin} → {destination}",
+        LANG_EN: "{origin} → {destination}",
+    },
+    "map_label_origin": {
+        LANG_ZH: "出发地",
+        LANG_EN: "Origin",
+    },
+    "map_label_dest": {
+        LANG_ZH: "目的地",
+        LANG_EN: "Destination",
+    },
     "detail_start": {
         LANG_ZH: "出发日期",
         LANG_EN: "Start Date",
@@ -201,6 +238,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         LANG_ZH: "未找到该行程",
         LANG_EN: "Trip not found",
     },
+    "detail_transport": {LANG_ZH: "出行方式", LANG_EN: "Transport"},
 }
 
 # 当前语言（运行时可切换）
